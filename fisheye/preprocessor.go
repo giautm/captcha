@@ -1,26 +1,22 @@
-package engine
+package fisheye
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"image"
-
-	"giautm.dev/captcha/fisheye"
 )
 
 type FisheyePreprocessor struct{}
 
-func NewFisheyePreprocessor() *FisheyePreprocessor {
+func NewPreprocessor() *FisheyePreprocessor {
 	return &FisheyePreprocessor{}
 }
 
 func (p *FisheyePreprocessor) Preprocess(_ context.Context, img image.Image) (image.Image, error) {
-	result, distance := fisheye.FindDistance(img)
+	result, distance := FindDistance(img)
 	if distance < 0 {
 		return nil, errors.New("preprocess: can not detect distance")
 	}
 
-	fmt.Printf("FISHEYE PREPROCESS DISTANCE: %d\n", distance)
 	return result, nil
 }

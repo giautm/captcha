@@ -24,18 +24,6 @@ func WithCaptchaLength(len int) Option {
 	}
 }
 
-func WithFisheyePreprocessor() Option {
-	return func(opt *EngineOption) error {
-		var preprocessor Preprocessor = NewFisheyePreprocessor()
-		if opt.stats {
-			preprocessor = &StatsPreprocessor{preprocessor}
-		}
-
-		opt.preprocessor = preprocessor
-		return nil
-	}
-}
-
 func WithPreprocessor(preprocessor Preprocessor) Option {
 	return func(opt *EngineOption) error {
 		if opt.stats {
