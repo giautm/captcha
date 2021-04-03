@@ -52,10 +52,10 @@ func (h *CaptchaSession) Fetch(ctx context.Context, fn func(c *http.Client, capt
 			if err != nil {
 				return err
 			}
-			defer ReportResult(h.Engine, result)(ctx, err)
+			report := ReportResult(h.Engine, result)
 
-			// NOTE(giautm): override err for report result work
 			err = fn(client, result.Captcha)
+			report(ctx, err)
 
 			return err
 		}()
