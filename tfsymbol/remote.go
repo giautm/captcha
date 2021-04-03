@@ -15,7 +15,7 @@ type PredictRequest struct {
 }
 
 type PredictReponse struct {
-	Predictions []float32 `json:"predictions"`
+	Predictions [][]float32 `json:"predictions"`
 }
 
 type HttpClient interface {
@@ -80,5 +80,5 @@ func (s *RemoteResolver) SymbolResolve(ctx context.Context, img image.Image) (st
 		return "", err
 	}
 
-	return s.labels.BestMatch(data.Predictions), nil
+	return s.labels.BestMatch(data.Predictions[0]), nil
 }
