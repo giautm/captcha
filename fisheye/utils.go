@@ -13,7 +13,7 @@ func CloneImage(dst draw.Image, src image.Image) draw.Image {
 	return dst
 }
 
-func GenFile(path string) (image.Image, error) {
+func GenFile(path string, testRowIndex int) (image.Image, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func GenFile(path string) (image.Image, error) {
 		return nil, err
 	}
 
-	result, distance := FindDistance(img)
+	result, distance := FindDistance(img, testRowIndex)
 	if distance < 0 {
 		return nil, errors.New("can not detect distance")
 	}

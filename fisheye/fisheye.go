@@ -20,7 +20,7 @@ func DistanceRange(dx int) (int, int) {
 	return dx / 4, dx/3 + 1
 }
 
-func FindDistance(src image.Image) (image.Image, int) {
+func FindDistance(src image.Image, testRowIndex int) (image.Image, int) {
 	results := make(map[int]image.Image)
 
 	b := src.Bounds()
@@ -28,8 +28,7 @@ func FindDistance(src image.Image) (image.Image, int) {
 	score, distance := dx, 0
 	for d, maxDistance := DistanceRange(dx); d < maxDistance; d++ {
 		results[d] = RemoveFishEye(image.NewRGBA(b), src, d)
-		// We test pixels at line 42 to check correct distance
-		if s := WhitePoints(results[d], 42); s < score {
+		if s := WhitePoints(results[d], testRowIndex); s < score {
 			score = s
 			distance = d
 		}
