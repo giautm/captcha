@@ -29,7 +29,6 @@ type CaptchaResolveEngine struct {
 }
 
 type CaptchaResult struct {
-	ID      string `json:"id"`
 	Captcha string `json:"captcha"`
 }
 
