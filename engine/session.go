@@ -70,7 +70,7 @@ func (h *CaptchaSession) Fetch(ctx context.Context, fn func(c *http.Client, capt
 			if e, ok := h.Engine.(ResultReporter); ok {
 				if err == nil {
 					e.Report(ctx, result, true)
-				} else if err == ErrCaptchaInvalid {
+				} else if errors.Is(err, ErrCaptchaInvalid) {
 					e.Report(ctx, result, false)
 				}
 			}
