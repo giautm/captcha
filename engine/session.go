@@ -19,7 +19,7 @@ type IDGenerator interface {
 }
 
 type CaptchaSession struct {
-	CaptchaURL  string
+	CaptchaURL  func() string
 	Engine      CaptchaResolver
 	IDGenerator IDGenerator
 	RetryCount  int
@@ -32,7 +32,7 @@ func (s NoopIDGen) NewID() string {
 	return ""
 }
 
-func NewCaptchaSession(captchaURL string, eng CaptchaResolver) *CaptchaSession {
+func NewCaptchaSession(captchaURL func() string, eng CaptchaResolver) *CaptchaSession {
 	return &CaptchaSession{
 		CaptchaURL:  captchaURL,
 		Engine:      eng,
@@ -54,7 +54,7 @@ func (h *CaptchaSession) Fetch(ctx context.Context, fn func(c *http.Client, capt
 	}
 	for i := 0; i < h.RetryCount; i++ {
 		err = func(ctx context.Context) error {
-			file, err := srcimg.DownloadReader(ctx, client, h.CaptchaURL)
+			file, err := srcimg.DownloadReader(ctx, client, h.CaptchaURL())
 			if err != nil {
 				return err
 			}
