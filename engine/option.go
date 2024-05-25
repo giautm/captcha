@@ -29,7 +29,6 @@ func WithPreprocessor(preprocessor Preprocessor) Option {
 		if opt.stats {
 			preprocessor = &StatsPreprocessor{preprocessor}
 		}
-
 		opt.preprocessor = preprocessor
 		return nil
 	}
@@ -40,7 +39,6 @@ func WithSymbolResolver(sr SymbolResolver) Option {
 		if opt.stats {
 			sr = &StatsSymbolResolver{sr}
 		}
-
 		opt.symbol = sr
 		return nil
 	}

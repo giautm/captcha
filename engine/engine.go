@@ -2,36 +2,43 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"image"
 	"io"
 
 	"giautm.dev/captcha/binimg"
 )
 
-type CaptchaResolver interface {
-	ResolveFile(ctx context.Context, r io.Reader) (*CaptchaResult, error)
-	ResolveImage(ctx context.Context, img image.Image) (*CaptchaResult, error)
-}
+type (
+	CaptchaResolveEngine struct {
+		binaryWidth  int
+		captchaLen   int
+		preprocessor Preprocessor
+		symResolver  SymbolResolver
+	}
+	CaptchaResult struct {
+		Captcha string `json:"captcha"`
+	}
+	CaptchaResolver interface {
+		ResolveFile(ctx context.Context, r io.Reader) (*CaptchaResult, error)
+		ResolveImage(ctx context.Context, img image.Image) (*CaptchaResult, error)
+	}
+	Preprocessor interface {
+		Transform(ctx context.Context, img image.Image) (image.Image, error)
+	}
+	SymbolResolver interface {
+		SymbolResolve(ctx context.Context, img image.Image) (string, error)
+	}
+	ResultReporter interface {
+		Report(ctx context.Context, result *CaptchaResult, correct bool) error
+	}
+)
 
-type Preprocessor interface {
-	Preprocess(ctx context.Context, img image.Image) (image.Image, error)
-}
+var (
+	ErrCaptchaInvalid = errors.New("captcha is invalid")
+)
 
-type SymbolResolver interface {
-	SymbolResolve(ctx context.Context, img image.Image) (string, error)
-}
-
-type CaptchaResolveEngine struct {
-	binaryWidth  int
-	captchaLen   int
-	preprocessor Preprocessor
-	symResolver  SymbolResolver
-}
-
-type CaptchaResult struct {
-	Captcha string `json:"captcha"`
-}
-
+// NewCaptchaResolveEngine creates a new captcha resolve engine.
 func NewCaptchaResolveEngine(opts ...Option) (*CaptchaResolveEngine, error) {
 	opt := &EngineOption{
 		binaryWidth: 10,
@@ -42,7 +49,6 @@ func NewCaptchaResolveEngine(opts ...Option) (*CaptchaResolveEngine, error) {
 			return nil, err
 		}
 	}
-
 	return &CaptchaResolveEngine{
 		binaryWidth:  opt.binaryWidth,
 		captchaLen:   opt.captchaLen,
@@ -51,35 +57,31 @@ func NewCaptchaResolveEngine(opts ...Option) (*CaptchaResolveEngine, error) {
 	}, nil
 }
 
+// ResolveFile resolves the captcha from the file.
 func (e *CaptchaResolveEngine) ResolveFile(ctx context.Context, r io.Reader) (*CaptchaResult, error) {
 	img, _, err := image.Decode(r)
 	if err != nil {
 		return nil, err
 	}
-
 	return e.ResolveImage(ctx, img)
 }
 
+// ResolveImage resolves the captcha from the image.
 func (e *CaptchaResolveEngine) ResolveImage(ctx context.Context, img image.Image) (*CaptchaResult, error) {
 	var err error
 	if e.preprocessor != nil {
-		if img, err = e.preprocessor.Preprocess(ctx, img); err != nil {
+		if img, err = e.preprocessor.Transform(ctx, img); err != nil {
 			return nil, err
 		}
 	}
-
 	captcha := ""
-	binImgs := binimg.AttachBinaryImages(img, e.captchaLen, e.binaryWidth)
-	for _, binImg := range binImgs {
-		symbol, err := e.symResolver.SymbolResolve(ctx, binImg)
+	binImages := binimg.GenImages(img, e.captchaLen, e.binaryWidth)
+	for _, bimg := range binImages {
+		symbol, err := e.symResolver.SymbolResolve(ctx, bimg)
 		if err != nil {
 			return nil, err
 		}
-
 		captcha += symbol
 	}
-
-	return &CaptchaResult{
-		Captcha: captcha,
-	}, nil
+	return &CaptchaResult{Captcha: captcha}, nil
 }

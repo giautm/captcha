@@ -15,6 +15,5 @@ func CreateLabeledFile(dir, label, name string) (*os.File, error) {
 	if err := os.MkdirAll(labelDir, os.ModePerm); err != nil {
 		return nil, err
 	}
-
 	return os.Create(filepath.Join(labelDir, name))
 }

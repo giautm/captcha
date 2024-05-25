@@ -1,28 +1,29 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"image"
-	"image/jpeg"
 	"image/png"
 	"os"
 	"path/filepath"
 
 	"giautm.dev/captcha/binimg"
-	"giautm.dev/captcha/engine"
 	"giautm.dev/captcha/fisheye"
 	"giautm.dev/captcha/labeled"
 	"github.com/gammazero/workerpool"
 )
 
 var (
-	dir          = flag.String("dir", "./labeled", "Input directory with labeled images")
-	outputDir    = flag.String("output", "./labeled", "Output directory with labeled images")
-	outputFormat = flag.String("outputFormat", "png", "Format of output images: png/jpeg")
-	workers      = flag.Int("workers", 100, "Number of workers")
-	processor    = flag.String("processor", "", "Pre-processor for images")
+	dir       = flag.String("dir", "./labeled", "Input directory with labeled images")
+	outputDir = flag.String("output", "./labeled", "Output directory with labeled images")
+	workers   = flag.Int("workers", 100, "Number of workers")
+)
+
+const (
+	binWidth     = 10
+	testRowIndex = 42
 )
 
 func main() {
@@ -30,10 +31,6 @@ func main() {
 	if *dir == "" || *outputDir == "" || *workers < 1 {
 		flag.Usage()
 		return
-	}
-	var p engine.Preprocessor = &noopProcess{}
-	if *processor == "fisheye" {
-		p = fisheye.NewPreprocessor()
 	}
 	wp := workerpool.New(*workers)
 	err := filepath.Walk(*dir, func(path string, info os.FileInfo, err error) error {
@@ -46,7 +43,7 @@ func main() {
 		}
 		wp.Submit(func() {
 			defer fmt.Printf("processed file: %q\n", path)
-			processFile(p, path, info.Name())
+			processFile(path, info.Name())
 		})
 		return nil
 	})
@@ -57,13 +54,7 @@ func main() {
 	}
 }
 
-type noopProcess struct{}
-
-func (*noopProcess) Transform(_ context.Context, img image.Image) (image.Image, error) {
-	return img, nil
-}
-
-func processFile(p engine.Preprocessor, path, name string) error {
+func processFile(path, name string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -74,15 +65,13 @@ func processFile(p engine.Preprocessor, path, name string) error {
 	if err != nil {
 		return err
 	}
-
-	result, err := p.Transform(context.Background(), img)
-	if err != nil {
-		return err
+	result, distance := fisheye.FindDistance(img, testRowIndex)
+	if distance < 0 {
+		return errors.New("can not detect distance")
 	}
-
 	captcha := labeled.CaptchaFromName(name)
-	imgs := binimg.GenImages(result, len(captcha), 10)
-	for idx, bimg := range imgs {
+	images := binimg.GenImages(result, len(captcha), binWidth)
+	for idx, bimg := range images {
 		err = saveImage(bimg, string(captcha[idx]), name)
 		if err != nil {
 			return err
@@ -97,10 +86,5 @@ func saveImage(img image.Image, label, name string) error {
 		return err
 	}
 	defer f.Close()
-	if *outputFormat == "png" {
-		err = png.Encode(f, img)
-	} else {
-		err = jpeg.Encode(f, img, &jpeg.Options{Quality: 100})
-	}
-	return err
+	return png.Encode(f, img)
 }

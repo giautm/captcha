@@ -3,91 +3,91 @@ package engine
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"time"
+)
 
-	"giautm.dev/captcha/srcimg"
+type (
+	CaptchaSession struct {
+		// Captcha is the function to fetch the captcha image, it should use
+		// the HTTPDoer to make requests.
+		Captcha func(_ context.Context, c HTTPDoer) (io.ReadCloser, error)
+		// Main is the function will be invoked after the captcha is resolved.
+		Main func(_ context.Context, c HTTPDoer, captcha string) (any, error)
+		// Engine is the captcha resolver.
+		Engine CaptchaResolver
+		// IDGenerator generates a new session ID.
+		IDGenerator IDGenerator
+		// RetryCount is the number of retries, 0 means no retry.
+		RetryCount int
+		// Transport is the HTTP transport used to make requests.
+		Transport http.RoundTripper
+	}
+	HTTPDoer interface {
+		Do(*http.Request) (*http.Response, error)
+	}
+	IDGenerator interface {
+		NewID() string
+	}
+	IDFunc    func() string
+	sessionID struct{}
 )
 
 var (
 	ErrLimitExceeded = errors.New("session: retry limit exceeded")
 )
 
-type IDGenerator interface {
-	NewID() string
-}
-
-type CaptchaSession struct {
-	CaptchaURL  func() string
-	Engine      CaptchaResolver
-	IDGenerator IDGenerator
-	RetryCount  int
-	Transport   http.RoundTripper
-}
-
-type NoopIDGen struct{}
-
-func (s NoopIDGen) NewID() string {
-	return ""
-}
-
-func NewCaptchaSession(captchaURL func() string, eng CaptchaResolver) *CaptchaSession {
-	return &CaptchaSession{
-		CaptchaURL:  captchaURL,
-		Engine:      eng,
-		IDGenerator: &NoopIDGen{},
-		RetryCount:  5,
-	}
-}
-
-func (h *CaptchaSession) Fetch(ctx context.Context, fn func(c *http.Client, captcha string) error) error {
+// Start starts the captcha session, it will fetch the captcha image,
+// resolve the captcha, and then invoke the main function.
+func (h *CaptchaSession) Start(ctx context.Context) (any, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
 	client := &http.Client{
 		Jar:       jar,
 		Timeout:   time.Second * 10,
 		Transport: h.Transport,
 	}
-	for i := 0; i < h.RetryCount; i++ {
-		err = func(ctx context.Context) error {
-			file, err := srcimg.DownloadReader(ctx, client, h.CaptchaURL())
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			result, err := h.Engine.ResolveFile(ctx, file)
-			if err != nil {
-				return err
-			}
-
-			err = fn(client, result.Captcha)
-
-			if e, ok := h.Engine.(ResultReporter); ok {
-				if err == nil {
-					e.Report(ctx, result, true)
-				} else if errors.Is(err, ErrCaptchaInvalid) {
-					e.Report(ctx, result, false)
-				}
-			}
-
-			return err
-		}(WithSessionID(ctx, h.IDGenerator))
-		if err == ErrCaptchaInvalid {
-			continue
+	handler := func(ctx context.Context) (any, error) {
+		file, err := h.Captcha(ctx, client)
+		if err != nil {
+			return nil, err
 		}
-
-		return err
+		defer file.Close()
+		result, err := h.Engine.ResolveFile(ctx, file)
+		if err != nil {
+			return nil, err
+		}
+		t, err := h.Main(ctx, client, result.Captcha)
+		if e, ok := h.Engine.(ResultReporter); ok {
+			if err == nil {
+				e.Report(ctx, result, true)
+			} else if errors.Is(err, ErrCaptchaInvalid) {
+				e.Report(ctx, result, false)
+			}
+		}
+		return t, err
 	}
-
-	return ErrLimitExceeded
+	for i := 0; i <= h.RetryCount; i++ {
+		switch t, err := handler(WithSessionID(ctx, h.IDGenerator)); {
+		case err == nil:
+			return t, nil
+		case errors.Is(err, ErrLimitExceeded):
+			continue
+		default:
+			return t, err
+		}
+	}
+	return nil, ErrLimitExceeded
 }
 
-type sessionID struct{}
+// NewID returns a new session ID.
+func (fn IDFunc) NewID() string {
+	return fn()
+}
 
 var sessionIDKey sessionID
 
@@ -97,14 +97,12 @@ func SessionIDFromContext(ctx context.Context) string {
 			return id
 		}
 	}
-
 	return ""
 }
 
 func WithSessionID(ctx context.Context, gen IDGenerator) context.Context {
-	if _, ok := (gen).(*NoopIDGen); ok {
+	if gen == nil {
 		return ctx
 	}
-
 	return context.WithValue(ctx, sessionIDKey, gen.NewID())
 }

@@ -5,36 +5,33 @@ import (
 	"image/draw"
 )
 
-func AttachBinaryImages(src image.Image, count, width int) []image.Image {
-	imgs := make([]image.Image, count)
+// GenImages generates a list of images by attaching the binary image
+// to the left of the source image.
+func GenImages(src image.Image, count, width int) []image.Image {
+	images := make([]image.Image, count)
 	for pos := 0; pos < count; pos++ {
-		imgs[pos] = AttachBinaryImage(src, count, width, pos)
+		img := ExpandLeft(src, width*count)
+		images[pos] = MarkPosition(img, width, pos)
 	}
-
-	return imgs
+	return images
 }
 
-func AttachBinaryImage(src image.Image, count, width, pos int) draw.Image {
-	return DrawBinary(ResizeImage(src, width*count), width, pos)
-}
-
-func ResizeImage(src image.Image, width int) draw.Image {
+// ExpandLeft expands the image to the left by width pixels.
+// The new image will have the same height as the original image.
+func ExpandLeft(src image.Image, width int) draw.Image {
 	p := image.Pt(width, 0)
 	b := src.Bounds().Add(p)
 	b.Min = b.Min.Sub(p)
-
 	dst := image.NewRGBA(b)
-	draw.Draw(dst, src.Bounds().Add(p), src, image.ZP, draw.Src)
-
+	draw.Draw(dst, src.Bounds().Add(p), src, image.Point{}, draw.Src)
 	return dst
 }
 
-func DrawBinary(dst draw.Image, width, position int) draw.Image {
+// MarkPosition marks the position of the image with a black line.
+func MarkPosition(dst draw.Image, width, position int) draw.Image {
 	b := dst.Bounds()
 	x := b.Min.X + width*position
 	r := image.Rect(x, b.Min.Y, x+width, b.Max.Y)
-
-	draw.Draw(dst, r, image.Black, image.ZP, draw.Src)
-
+	draw.Draw(dst, r, image.Black, image.Point{}, draw.Src)
 	return dst
 }
